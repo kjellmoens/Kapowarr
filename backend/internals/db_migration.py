@@ -1312,3 +1312,15 @@ def _migrate_remove_search_all_task() -> None:
     )
 
     return
+
+
+@DatabaseMigrationHandler.register_handler(51)
+def _migrate_add_newznab_indexer_fields() -> None:
+    cursor = get_db()
+    cursor.execute(
+        "ALTER TABLE indexer_clients ADD COLUMN api_key VARCHAR(255);"
+    )
+    cursor.execute(
+        "ALTER TABLE indexer_clients ADD COLUMN categories TEXT;"
+    )
+    return

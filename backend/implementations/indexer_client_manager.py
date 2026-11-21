@@ -103,6 +103,14 @@ def _validate_indexer_data(
     return filtered_data
 
 
+def _loggable(data: Mapping[str, Any]) -> Dict[str, Any]:
+    "Indexer data with the API key hidden, for logging"
+    return {
+        k: ('<hidden>' if k == ICF.API_KEY.value and v else v)
+        for k, v in data.items()
+    }
+
+
 # region Base Indexer Client
 class BaseIndexerClient(IndexerClient):
     @property
@@ -119,7 +127,8 @@ class BaseIndexerClient(IndexerClient):
             SELECT
                 enabled,
                 title, url,
-                gc_service_preference, gc_avoid_large_downloads
+                gc_service_preference, gc_avoid_large_downloads,
+                api_key, categories
             FROM indexer_clients
             WHERE id = ?
             LIMIT 1;
@@ -129,6 +138,8 @@ class BaseIndexerClient(IndexerClient):
         self._enabled: bool = data['enabled']
         self._title: str = data['title']
         self._url: str = data['url']
+        self._api_key: Union[str, None] = data['api_key']
+        self._categories: Union[str, None] = data['categories']
 
         if (
             data["gc_service_preference"] is not None
@@ -153,11 +164,13 @@ class BaseIndexerClient(IndexerClient):
             'title': self._title,
             'url': self._url,
             'gc_service_preference': self._gc_service_preference,
-            'gc_avoid_large_downloads': self._gc_avoid_large_downloads
+            'gc_avoid_large_downloads': self._gc_avoid_large_downloads,
+            'api_key': self._api_key,
+            'categories': self._categories
         }
 
     def update_indexer(self, data: Mapping[str, Any]) -> None:
-        LOGGER.info(f"Updating indexer {self._id}: {data}")
+        LOGGER.info(f"Updating indexer {self._id}: {_loggable(data)}")
         filtered_data = _validate_indexer_data(data, self.required_tokens)
 
         # Raises exception on fail
@@ -170,10 +183,14 @@ class BaseIndexerClient(IndexerClient):
                 title = :title,
                 url = :url,
                 gc_service_preference = :gc_service_preference,
-                gc_avoid_large_downloads = :gc_avoid_large_downloads
+                gc_avoid_large_downloads = :gc_avoid_large_downloads,
+                api_key = :api_key,
+                categories = :categories
             WHERE id = :id;
             """,
             {
+                # Columns of fields that this client doesn't use become NULL
+                **{f.value: None for f in ICF},
                 **filtered_data,
                 "id": self._id
             }
@@ -181,6 +198,8 @@ class BaseIndexerClient(IndexerClient):
         self._enabled = filtered_data[ICF.ENABLED.value]
         self._title = filtered_data[ICF.TITLE.value]
         self._url = filtered_data[ICF.URL.value]
+        self._api_key = filtered_data.get(ICF.API_KEY.value)
+        self._categories = filtered_data.get(ICF.CATEGORIES.value)
         if (
             "gc_service_preference" in self.required_tokens
             and "gc_avoid_large_downloads" in self.required_tokens
@@ -423,7 +442,8 @@ class IndexerClients:
             **extra_fields
         }
         LOGGER.info(
-            f"Adding indexer: {download_type=}, {client_type=}, {data=}"
+            f"Adding indexer: {download_type=}, {client_type=}, "
+            f"data={_loggable(data)}"
         )
         filtered_data = _validate_indexer_data(
             data,
@@ -451,12 +471,14 @@ class IndexerClients:
                 enabled,
                 download_type, client_type,
                 title, url,
-                gc_service_preference, gc_avoid_large_downloads
+                gc_service_preference, gc_avoid_large_downloads,
+                api_key, categories
             ) VALUES (
                 :enabled,
                 :download_type, :client_type,
                 :title, :url,
-                :gc_service_preference, :gc_avoid_large_downloads
+                :gc_service_preference, :gc_avoid_large_downloads,
+                :api_key, :categories
             );
             """,
             filtered_data
@@ -495,16 +517,17 @@ class IndexerClients:
         Returns:
             List[IndexerClient]: The list of all indexer clients.
         """
-        cursor = get_db()
-        cursor.execute("""
+        # Fetch all rows first: creating a client runs a query on the same
+        # cursor, which would end the iteration after the first client
+        clients = get_db().execute("""
             SELECT download_type, client_type, id
             FROM indexer_clients
             ORDER BY title, id;
-        """)
+        """).fetchall()
 
         return [
             cls.clients[DownloadType(client[0])][client[1]](client[2])
-            for client in cursor
+            for client in clients
         ]
 
     @classmethod

@@ -506,6 +506,7 @@ class DownloadType(BaseEnum):
 
     DDL = 1
     TORRENT = 2
+    USENET = 3
 
 
 class IndexerClientField(BaseEnum):
@@ -526,6 +527,16 @@ class IndexerClientField(BaseEnum):
     """
     Only applicable for the GC client. Whether to avoid downloads if they're
     over 400MB.
+    """
+
+    # Newznab
+    API_KEY = "api_key"
+    "The API key to access the indexer (e.g. Newznab)"
+
+    CATEGORIES = "categories"
+    """
+    Comma separated list of Newznab category IDs to search in
+    (e.g. "7030" for Books > Comics)
     """
 
 
@@ -596,6 +607,8 @@ class DownloadService(BaseEnum):
     "A DDL download link straight from their own servers"
     GETCOMICS_TORRENT = "GetComics (torrent)"
     "A torrent magnet link directly on the webpage"
+    USENET = "Usenet"
+    "An NZB from a Newznab indexer, downloaded by a usenet client"
 
 
 class DownloadClientIdentifier(BaseEnum):
@@ -609,6 +622,7 @@ class DownloadClientIdentifier(BaseEnum):
     PIXELDRAIN = "pd"
     PIXELDRAIN_FOLDER = "pd_folder"
     TORRENT = "torrent"
+    USENET = "usenet"
     WETRANSFER = "wt"
 
 
@@ -688,6 +702,8 @@ class IndexerClientData(TypedDict):
     url: str
     gc_service_preference: Union['CommaList', None]
     gc_avoid_large_downloads: Union[bool, None]
+    api_key: Union[str, None]
+    categories: Union[str, None]
 
 
 class SearchQuery(TypedDict):

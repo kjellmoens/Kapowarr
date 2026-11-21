@@ -27,6 +27,42 @@ function createGCAvoidLargeDownloadsInput(inputId) {
 	return row;
 }
 
+function createTextInput(inputId, labelText, description, placeholder) {
+	const row = document.createElement('tr');
+	const header = document.createElement('th');
+	const label = document.createElement('label');
+	label.innerText = labelText;
+	label.setAttribute('for', inputId);
+	header.appendChild(label);
+	row.appendChild(header);
+	const container = document.createElement('td');
+	const input = document.createElement('input');
+	input.type = 'text';
+	input.id = inputId;
+	if (placeholder)
+		input.placeholder = placeholder;
+	container.appendChild(input);
+	if (description) {
+		const desc = document.createElement('p');
+		desc.innerText = description;
+		container.appendChild(desc);
+	};
+	row.appendChild(container);
+	return row;
+};
+
+function createApiKeyInput(inputId) {
+	return createTextInput(inputId, 'API Key', 'The API key of the indexer.');
+};
+
+function createCategoriesInput(inputId) {
+	return createTextInput(
+		inputId, 'Categories',
+		'Comma separated Newznab category IDs to search in. Leave empty for 7030 (Books > Comics).',
+		'7030'
+	);
+};
+
 const defaultServicePreference = [
 	"Mega", "MediaFire",
 	"WeTransfer", "Pixeldrain",
@@ -127,6 +163,18 @@ function loadEditIndexer(apiKey, indexerId) {
 		form.querySelector('#edit-url-input').value =
 			clientData.result.url;
 
+		if (clientOptions.includes('api_key')) {
+			const apiKeyInput = createApiKeyInput('edit-api-key-input');
+			apiKeyInput.querySelector('input').value = clientData.result.api_key || '';
+			form.appendChild(apiKeyInput);
+		};
+
+		if (clientOptions.includes('categories')) {
+			const categoriesInput = createCategoriesInput('edit-categories-input');
+			categoriesInput.querySelector('input').value = clientData.result.categories || '';
+			form.appendChild(categoriesInput);
+		};
+
 		if (clientOptions.includes('gc_avoid_large_downloads')) {
 			const gcAvoidInput = createGCAvoidLargeDownloadsInput('edit-gc-avoid-input');
 			gcAvoidInput.querySelector('input').checked =
@@ -167,6 +215,8 @@ function saveEditIndexer() {
 				url: form.querySelector('#edit-url-input').value,
 				gc_service_preference: gcServicePreference,
 				gc_avoid_large_downloads: form.querySelector('#edit-gc-avoid-input')?.checked ?? null,
+				api_key: form.querySelector('#edit-api-key-input')?.value ?? null,
+				categories: form.querySelector('#edit-categories-input')?.value ?? null,
 			};
 			sendAPI('PUT', `/indexers/${indexerId}`, apiKey, {}, data)
 			.then(response => {
@@ -195,6 +245,8 @@ async function testEditIndexer(apiKey) {
 		url: form.querySelector('#edit-url-input').value,
 		gc_service_preference: gcServicePreference,
 		gc_avoid_large_downloads: form.querySelector('#edit-gc-avoid-input')?.checked ?? null,
+		api_key: form.querySelector('#edit-api-key-input')?.value ?? null,
+		categories: form.querySelector('#edit-categories-input')?.value ?? null,
 	};
 
 	return await sendAPI('POST', '/indexers/test', apiKey, {}, data)
@@ -259,6 +311,12 @@ function loadAddIndexer(apiKey, downloadType, clientType) {
 	.then(json => {
 		const clientOptions = json.result[downloadType][clientType];
 
+		if (clientOptions.required_tokens.includes('api_key'))
+			form.appendChild(createApiKeyInput('add-api-key-input'));
+
+		if (clientOptions.required_tokens.includes('categories'))
+			form.appendChild(createCategoriesInput('add-categories-input'));
+
 		if (clientOptions.required_tokens.includes('gc_avoid_large_downloads'))
 			form.appendChild(createGCAvoidLargeDownloadsInput('add-gc-avoid-input'));
 
@@ -294,6 +352,8 @@ function saveAddIndexer() {
 				url: form.querySelector('#add-url-input').value,
 				gc_service_preference: gcServicePreference,
 				gc_avoid_large_downloads: form.querySelector('#add-gc-avoid-input')?.checked ?? null,
+				api_key: form.querySelector('#add-api-key-input')?.value ?? null,
+				categories: form.querySelector('#add-categories-input')?.value ?? null,
 			};
 			sendAPI('POST', '/indexers', apiKey, {}, data)
 			.then(response => {
@@ -331,6 +391,8 @@ async function testAddIndexer(apiKey) {
 		url: form.querySelector('#add-url-input').value,
 		gc_service_preference: gcServicePreference,
 		gc_avoid_large_downloads: form.querySelector('#add-gc-avoid-input')?.checked ?? null,
+		api_key: form.querySelector('#add-api-key-input')?.value ?? null,
+		categories: form.querySelector('#add-categories-input')?.value ?? null,
 	};
 
 	return await sendAPI('POST', '/indexers/test', apiKey, {}, data)
@@ -339,17 +401,19 @@ async function testAddIndexer(apiKey) {
 		if (json.result.success)
 			// Test successful
 			testButton.classList.add('show-success');
-		else
+		else {
 			// Test failed
 			testButton.classList.add('show-fail');
 			error.innerText = brokenClientReasonMap[json.result.description];
 			hide([], [error]);
+		};
 		return json.result.success;
 	});
 };
 
 const typeToList = {
-	1: document.querySelector("#ddl-indexer-list")
+	1: document.querySelector("#ddl-indexer-list"),
+	3: document.querySelector("#usenet-indexer-list")
 };
 
 function loadIndexers(apiKey) {
