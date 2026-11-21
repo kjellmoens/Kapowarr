@@ -27,6 +27,7 @@ from backend.implementations.indexer_client_manager import IndexerClients
 from backend.implementations.indexer_clients.usenet.Newznab import \
     RECENT_TITLES
 from backend.implementations.matching import download_group_filter
+from backend.implementations.release_title import usenet_release_conflict
 from backend.implementations.volumes import Volume
 
 CONTENT_DISPOSITION_NAME = compile(
@@ -183,6 +184,26 @@ class NewznabPrepper(DownloadPrepper):
             raise EnqueuingDownloadFailure(
                 EnqueuingDownloadFailureReason.NO_MATCHES
             )
+
+        if not self.force_match:
+            conflict = usenet_release_conflict(
+                self._web_title,
+                volume_data,
+                volume.get_issues(),
+                (
+                    info['issue_number']
+                    if isinstance(info['issue_number'], float)
+                    else None
+                )
+            )
+            if conflict:
+                LOGGER.info(
+                    f"Release does not match volume {self.volume_id}: "
+                    f"{self._web_title} ({conflict})"
+                )
+                raise EnqueuingDownloadFailure(
+                    EnqueuingDownloadFailureReason.NO_MATCHES
+                )
 
         indexer_title = IndexerClients.get_client(self.indexer_id).title
 
