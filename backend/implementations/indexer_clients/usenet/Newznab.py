@@ -7,6 +7,7 @@ NZB files.
 """
 
 from asyncio import run
+from collections import OrderedDict
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Dict, List, Tuple, Union
@@ -30,6 +31,24 @@ DEFAULT_CATEGORIES = "7030"
 PAGE_SIZE = 100
 
 NEWZNAB_NS = "{http://www.newznab.com/DTD/2010/feeds/attributes/}"
+
+RECENT_TITLES: "OrderedDict[str, str]" = OrderedDict()
+"""
+NZB link -> release title of recent search results. The download prepper
+only gets the link, and the NZB itself doesn't reliably contain the release
+name (its meta name is often a raw usenet subject).
+"""
+RECENT_TITLES_MAX = 10_000
+
+
+def remember_title(link: str, title: str) -> None:
+    "Remember the release title of an NZB link"
+    RECENT_TITLES[link] = title
+    RECENT_TITLES.move_to_end(link)
+    while len(RECENT_TITLES) > RECENT_TITLES_MAX:
+        RECENT_TITLES.popitem(last=False)
+    return
+
 
 NEWZNAB_AUTH_ERRORS = ("100", "101", "102")
 """
@@ -157,6 +176,7 @@ class NewznabIndexer(BaseIndexerClient):
         return (self._categories or DEFAULT_CATEGORIES).replace(' ', '')
 
     def _to_search_result(self, item: Dict[str, Any]) -> SearchResultData:
+        remember_title(item['link'], item['title'])
         return {
             **extract_filename_data(
                 item['title'],

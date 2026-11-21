@@ -4,6 +4,7 @@
 Turns an NZB link from a Newznab indexer into a usenet download.
 """
 
+from html import unescape
 from re import IGNORECASE, compile
 from typing import List, Optional, Union
 from urllib.parse import unquote
@@ -23,6 +24,8 @@ from backend.base.logging import LOGGER
 from backend.implementations.download_clients.Usenet import UsenetDownload
 from backend.implementations.download_prepper_manager import DownloadPreppers
 from backend.implementations.indexer_client_manager import IndexerClients
+from backend.implementations.indexer_clients.usenet.Newznab import \
+    RECENT_TITLES
 from backend.implementations.matching import download_group_filter
 from backend.implementations.volumes import Volume
 
@@ -34,29 +37,59 @@ NZB_META_NAME = compile(
     r'<meta\s+type="name"\s*>([^<]+)</meta>',
     IGNORECASE
 )
+SUBJECT_FILENAME = compile(r'"([^"]+)"')
+"The quoted filename in a usenet subject"
+ARCHIVE_EXTENSIONS = compile(
+    r'(\.part\d+)?(\.vol\d+\+\d+)?'
+    r'\.(par2|rar|r\d\d|zip|7z|nzb|cbr|cbz|cb7|pdf|epub|sfv|nfo)$',
+    IGNORECASE
+)
 
 
-def _release_name(response_headers, nzb: str) -> Union[str, None]:
+def _clean_name(name: str) -> str:
+    """Turn a usenet subject or filename into a release name.
+
+    `(Asterix) - "Asterix - 36 - De Papyrus.par2" [01/16] yEnc` becomes
+    `Asterix - 36 - De Papyrus`.
+    """
+    name = unescape(name).strip()
+    quoted = SUBJECT_FILENAME.search(name)
+    if quoted and ('yenc' in name.lower() or '[' in name):
+        name = quoted.group(1)
+    return ARCHIVE_EXTENSIONS.sub('', name).strip()
+
+
+def _release_name(
+    link: str,
+    response_headers,
+    nzb: str
+) -> Union[str, None]:
     """Get the release name of an NZB.
 
     Args:
+        link (str): The link the NZB was downloaded from.
         response_headers: The headers of the response that served the NZB.
         nzb (str): The NZB file.
 
     Returns:
         Union[str, None]: The release name, if found.
     """
-    match = NZB_META_NAME.search(nzb)
-    if match:
-        return match.group(1).strip()
+    # The title the indexer gave in the search results
+    if link in RECENT_TITLES:
+        return RECENT_TITLES[link]
 
     disposition = response_headers.get('Content-Disposition') or ''
     match = CONTENT_DISPOSITION_NAME.search(disposition)
     if match:
-        name = unquote(match.group(1)).strip()
-        if name.lower().endswith('.nzb'):
-            name = name[:-4]
-        return name or None
+        name = _clean_name(unquote(match.group(1)))
+        if name:
+            return name
+
+    match = NZB_META_NAME.search(nzb)
+    if match:
+        name = _clean_name(match.group(1))
+        if name:
+            return name
 
     return None
 
@@ -117,7 +150,7 @@ class NewznabPrepper(DownloadPrepper):
                 EnqueuingDownloadFailureReason.WEBPAGE_BROKEN
             )
 
-        name = _release_name(response.headers, nzb)
+        name = _release_name(self.link, response.headers, nzb)
         if not name:
             raise EnqueuingDownloadFailure(
                 EnqueuingDownloadFailureReason.NO_MATCHES
