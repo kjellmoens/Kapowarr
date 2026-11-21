@@ -302,24 +302,20 @@ class SABnzbd(BaseExternalClient):
 
     def delete_download(self, download_id: str, delete_files: bool) -> None:
         # The job is either in the queue or in the history. SABnzbd answers
-        # with an error for the list it isn't in, so try both and only fail
-        # when neither worked.
+        # with an error for the list it isn't in (and for a job that's already
+        # gone), so try both. Only a connection problem is a real failure.
         del_files = 1 if delete_files else 0
-        deleted = False
-        last_error: Union[ClientNotWorking, None] = None
         for mode in ('queue', 'history'):
             try:
                 self.__call(
                     mode=mode, name='delete',
                     value=download_id, del_files=del_files
                 )
-                deleted = True
             except ClientNotWorking as e:
-                last_error = e
+                if e.reason == BrokenClientReason.CONNECTION_ERROR:
+                    raise
 
         self.statuses.pop(download_id, None)
-        if not deleted and last_error is not None:
-            raise last_error
         return
 
     def on_shutdown(self) -> None:

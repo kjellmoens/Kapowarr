@@ -4,7 +4,7 @@
 A download of an NZB by an external usenet client (e.g. SABnzbd).
 """
 
-from os.path import basename, join
+from os.path import basename, dirname, isfile, join
 from threading import Event
 from typing import Any, Dict, Tuple, Union
 
@@ -147,11 +147,16 @@ class UsenetDownload(ExternalDownload, BaseDirectDownload):
         self._size = status['size']
 
         if status.get('storage'):
-            # Where the client put the files, translated to our filesystem
-            self._files = [RemoteMappings.remote_to_local(
+            # Where the client put the files, translated to our filesystem.
+            # For a job with one file, SABnzbd reports that file instead of
+            # the job folder; the import expects the folder.
+            storage = RemoteMappings.remote_to_local(
                 self._external_client.id,
                 status['storage']
-            )]
+            )
+            if isfile(storage):
+                storage = dirname(storage)
+            self._files = [storage]
 
         if self.state not in (
             DownloadState.CANCELED_STATE,
