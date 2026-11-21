@@ -57,6 +57,7 @@ class SABnzbd(BaseExternalClient):
         ssn: Session,
         base_url: str,
         api_token: Union[str, None],
+        quiet: bool = False,
         **params: Any
     ) -> Dict[str, Any]:
         """Make a request to the SABnzbd API.
@@ -65,6 +66,8 @@ class SABnzbd(BaseExternalClient):
             ssn (Session): The session to make the request with.
             base_url (str): Base URL of the instance.
             api_token (Union[str, None]): The API key of the instance.
+            quiet (bool, optional): Don't log an error that SABnzbd returns.
+                Defaults to False.
             params (kwargs): The parameters of the API call (mode, name, ...).
 
         Raises:
@@ -109,15 +112,18 @@ class SABnzbd(BaseExternalClient):
             error = str(result.get('error', ''))
             if 'api key' in error.lower():
                 raise CredentialInvalid
-            LOGGER.error(f"SABnzbd returned an error: {error}")
+            if not quiet:
+                LOGGER.error(f"SABnzbd returned an error: {error}")
             raise ClientNotWorking(
                 BrokenClientReason.FAILED_PROCESSING_RESPONSE
             )
 
         return result
 
-    def __call(self, **params: Any) -> Dict[str, Any]:
-        return self._api(self.ssn, self._base_url, self._api_token, **params)
+    def __call(self, quiet: bool = False, **params: Any) -> Dict[str, Any]:
+        return self._api(
+            self.ssn, self._base_url, self._api_token, quiet, **params
+        )
 
     def _category_for_folder(self, target_folder: str) -> Union[str, None]:
         """Find the SABnzbd category that downloads into the given folder.
@@ -308,6 +314,7 @@ class SABnzbd(BaseExternalClient):
         for mode in ('queue', 'history'):
             try:
                 self.__call(
+                    quiet=True,
                     mode=mode, name='delete',
                     value=download_id, del_files=del_files
                 )

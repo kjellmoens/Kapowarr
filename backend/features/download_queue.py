@@ -118,6 +118,7 @@ class DownloadHandler(metaclass=Singleton):
                         'web_sub_title': download.web_sub_title
                     }
                 ).lastrowid
+                cursor.connection.commit()
 
             if not isinstance(download, ExternalDownload):
                 download.download_thread = Server().get_db_thread(

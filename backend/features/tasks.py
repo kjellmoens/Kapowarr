@@ -110,6 +110,9 @@ class TaskHandler(metaclass=Singleton):
                 "INSERT INTO task_history VALUES (?,?,?);",
                 (task.action, task.display_title, round(time()))
             )
+            # Commit now: preparing the downloads below makes network calls,
+            # and an open write transaction blocks every other thread
+            cursor.connection.commit()
 
             if not task.stop:
                 if isinstance(task, DownloadTask) and result:

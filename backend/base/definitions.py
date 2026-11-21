@@ -53,7 +53,7 @@ class Constants:
     DB_ORIGINAL_NAME = "Kapowarr_original.db"
     "Name of database file when backed up because a new database is imported"
 
-    DB_TIMEOUT = 10.0 # seconds
+    DB_TIMEOUT = 60.0 # seconds
     "Seconds to wait on database command before timing out"
 
     DB_REVERT_TIME = 60.0 # seconds
