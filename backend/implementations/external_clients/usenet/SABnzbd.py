@@ -301,16 +301,25 @@ class SABnzbd(BaseExternalClient):
         return self.statuses[download_id]
 
     def delete_download(self, download_id: str, delete_files: bool) -> None:
+        # The job is either in the queue or in the history. SABnzbd answers
+        # with an error for the list it isn't in, so try both and only fail
+        # when neither worked.
         del_files = 1 if delete_files else 0
-        self.__call(
-            mode='queue', name='delete',
-            value=download_id, del_files=del_files
-        )
-        self.__call(
-            mode='history', name='delete',
-            value=download_id, del_files=del_files
-        )
+        deleted = False
+        last_error: Union[ClientNotWorking, None] = None
+        for mode in ('queue', 'history'):
+            try:
+                self.__call(
+                    mode=mode, name='delete',
+                    value=download_id, del_files=del_files
+                )
+                deleted = True
+            except ClientNotWorking as e:
+                last_error = e
+
         self.statuses.pop(download_id, None)
+        if not deleted and last_error is not None:
+            raise last_error
         return
 
     def on_shutdown(self) -> None:
